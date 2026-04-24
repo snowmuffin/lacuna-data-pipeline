@@ -1,0 +1,40 @@
+# Copy to `sources.yaml` in the repo root and edit (sources.yaml is gitignored).
+# Collect flow reads `sources.yaml` by default (see pipeline/sources_config.py).
+
+version: 1
+
+defaults:
+  output_root: ./data/raw
+  on_error: continue
+  resume: true
+
+auth:
+  dotenv_path: .env
+  hf_token_env: HF_TOKEN
+  github_token_env: GITHUB_TOKEN
+
+datasets:
+  # type: hf — git clone of https://huggingface.co/datasets/{id} (use `url` or `id`)
+  - name: example_hf_dataset
+    type: hf
+    id: stanfordnlp/imdb
+    url: https://huggingface.co/datasets/stanfordnlp/imdb
+    count: ~
+    tags: example
+    note: Public example; replace with your own entries.
+
+  # type: github + github.com/owner/repo — full git clone
+  - name: example_git_repo
+    type: github
+    url: https://github.com/octocat/Hello-World
+    count: ~
+    tags: example
+    note: Tiny public repo for pipeline smoke tests.
+
+  # type: github + raw URL — single file download (not a git clone)
+  - name: example_raw_file
+    type: github
+    url: https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
+    count: ~
+    tags: example
+    note: Illustrates raw.githubusercontent.com handling.

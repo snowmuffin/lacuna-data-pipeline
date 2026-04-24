@@ -1,5 +1,6 @@
 .venv
 .env
+sources.yaml
 
 # Pipeline data (keep layout via .gitkeep)
 /data/raw/*
