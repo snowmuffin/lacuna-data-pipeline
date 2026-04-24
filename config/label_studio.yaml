@@ -1,0 +1,6 @@
+# Label Studio connection (non-secret keys only; use env for tokens)
+version: 1
+
+url: "http://localhost:8080"
+# project_id: 1
+# api_key: set via LABEL_STUDIO_API_KEY in environment

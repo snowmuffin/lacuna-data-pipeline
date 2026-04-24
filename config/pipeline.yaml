@@ -1,0 +1,13 @@
+# Pipeline parameters (paths, batch sizes, model IDs, etc.)
+version: 1
+
+paths:
+  raw: data/raw
+  refined: data/refined
+  labeled: data/labeled
+  export: data/export
+
+collect: {}
+refine: {}
+classify: {}
+export: {}

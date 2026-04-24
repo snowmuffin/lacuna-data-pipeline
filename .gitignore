@@ -1,0 +1,12 @@
+.venv
+.env
+
+# Pipeline data (keep layout via .gitkeep)
+/data/raw/*
+!/data/raw/.gitkeep
+/data/refined/*
+!/data/refined/.gitkeep
+/data/labeled/*
+!/data/labeled/.gitkeep
+/data/export/*
+!/data/export/.gitkeep
