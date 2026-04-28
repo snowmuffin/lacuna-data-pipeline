@@ -8,6 +8,15 @@ paths:
   export: data/export
 
 collect: {}
-refine: {}
+refine:
+  # Default refine paths (under repo root); code uses same layout unless overridden
+  paths:
+    jsonl: data/refined/jsonl
+    multi_turn: data/refined/multi_turn
+    single_turn: data/refined/single_turn
+    final: data/refined/final
+  hf_staging:
+    root: data/refined/hf_datasets
+    # repo_name / namespace / remote_git_url are usually passed as flow parameters
 classify: {}
 export: {}

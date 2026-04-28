@@ -7,6 +7,8 @@ defaults:
   output_root: ./data/raw
   on_error: continue
   resume: true
+  # After each git clone (HF / GitHub repo), run `git lfs install --local` + `git lfs pull` when git-lfs is installed.
+  git_lfs: true
 
 auth:
   dotenv_path: .env

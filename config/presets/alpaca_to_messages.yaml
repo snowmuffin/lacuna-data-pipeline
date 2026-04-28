@@ -1,0 +1,4 @@
+# Alpaca-style instruction JSONL -> OpenAI-style messages JSONL
+adapter: alpaca
+output_format: messages
+encoding: utf-8

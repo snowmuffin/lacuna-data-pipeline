@@ -90,6 +90,47 @@ def _github_clone_url(url: str, token: str | None) -> str:
     return f"{p.scheme}://x-access-token:{safe}@{host}{path}.git"
 
 
+def _git_lfs_pull(dest: Path, *, enabled: bool = True) -> None:
+    """Fetch Git LFS blobs for ``dest`` (HF/GitHub datasets often use LFS for parquet).
+
+    No-op if ``enabled`` is false, ``dest`` is not a git repo, or ``git-lfs`` is missing.
+    """
+    if not enabled or not (dest / ".git").is_dir():
+        return
+    logger.info("git lfs install + pull -> %s", dest)
+    try:
+        r1 = subprocess.run(
+            ["git", "-C", str(dest), "lfs", "install", "--local"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except FileNotFoundError:
+        logger.warning("git not on PATH; skip LFS for %s", dest)
+        return
+    err1 = ((r1.stderr or "") + (r1.stdout or "")).strip()
+    if r1.returncode != 0:
+        low = err1.lower()
+        if "not a git command" in low or "git-lfs" in low and "not found" in low:
+            logger.warning("git-lfs not installed; skip LFS for %s (%s)", dest, err1 or r1.returncode)
+            return
+        logger.warning("git lfs install --local non-zero for %s (continuing pull): %s", dest, err1 or r1.returncode)
+
+    try:
+        r2 = subprocess.run(
+            ["git", "-C", str(dest), "lfs", "pull"],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return
+    err2 = ((r2.stderr or "") + (r2.stdout or "")).strip()
+    if r2.returncode != 0:
+        logger.warning("git lfs pull failed for %s: %s", dest, err2 or r2.returncode)
+    else:
+        logger.info("git lfs pull finished for %s", dest)
+
+
 def _git_clone(url: str, dest: Path, *, shallow: bool = True) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["git", "clone"]
@@ -128,26 +169,44 @@ def _should_skip_file(dest_file: Path, resume: bool) -> bool:
     return resume and dest_file.is_file() and dest_file.stat().st_size > 0
 
 
-def fetch_hf(ds: dict[str, Any], dest: Path, hf_token: str | None, *, resume: bool) -> Path:
+def fetch_hf(
+    ds: dict[str, Any],
+    dest: Path,
+    hf_token: str | None,
+    *,
+    resume: bool,
+    git_lfs: bool = True,
+) -> Path:
     base = _hf_clone_url(ds)
     url = _hf_git_clone_url(base, hf_token)
     if _should_skip_clone(dest, resume):
         logger.info("skip (exists): %s", dest)
+        _git_lfs_pull(dest, enabled=git_lfs)
         return dest
     if dest.exists():
         shutil.rmtree(dest)
     _git_clone(url, dest)
+    _git_lfs_pull(dest, enabled=git_lfs)
     return dest
 
 
-def fetch_github_repo(ds: dict[str, Any], dest: Path, github_token: str | None, *, resume: bool) -> Path:
+def fetch_github_repo(
+    ds: dict[str, Any],
+    dest: Path,
+    github_token: str | None,
+    *,
+    resume: bool,
+    git_lfs: bool = True,
+) -> Path:
     url = _github_clone_url(str(ds["url"]), github_token)
     if _should_skip_clone(dest, resume):
         logger.info("skip (exists): %s", dest)
+        _git_lfs_pull(dest, enabled=git_lfs)
         return dest
     if dest.exists():
         shutil.rmtree(dest)
     _git_clone(url, dest)
+    _git_lfs_pull(dest, enabled=git_lfs)
     return dest
 
 
@@ -172,17 +231,18 @@ def fetch_dataset_task(
     github_token: str | None,
     resume: bool,
     on_error: str,
+    git_lfs: bool = True,
 ) -> Path | None:
     """Clone or download one dataset entry; returns path or None if skipped on error."""
     dtype = (ds.get("type") or "").strip().lower()
     dest_dir = _dataset_dest_dir(output_root, ds)
     try:
         if dtype == "hf":
-            return fetch_hf(ds, dest_dir, hf_token, resume=resume)
+            return fetch_hf(ds, dest_dir, hf_token, resume=resume, git_lfs=git_lfs)
         if dtype == "github":
             url = str(ds.get("url") or "")
             if _is_github_repo_clone_url(url):
-                return fetch_github_repo(ds, dest_dir, github_token, resume=resume)
+                return fetch_github_repo(ds, dest_dir, github_token, resume=resume, git_lfs=git_lfs)
             return fetch_github_file(ds, dest_dir, github_token, resume=resume)
         logger.warning("unknown dataset type %r for %s — skipped", dtype, ds.get("name"))
         return None

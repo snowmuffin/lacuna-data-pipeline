@@ -2,6 +2,11 @@
 .env
 sources.yaml
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Pipeline data (keep layout via .gitkeep)
 /data/raw/*
 !/data/raw/.gitkeep
