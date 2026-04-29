@@ -1,6 +1,7 @@
 .venv
 .env
 sources.yaml
+config/convmerge_manifest.yaml
 
 # IDE / local artifacts (may reference paths outside this repo)
 .cursor/

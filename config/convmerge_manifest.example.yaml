@@ -1,0 +1,33 @@
+# convmerge fetch manifest example (fill with your own dataset sources).
+#
+# 1) Copy this file to `config/convmerge_manifest.yaml`
+# 2) Edit dataset entries as needed
+# 3) Run:
+#    python -m pipeline.flows.dataset_pipeline --collect-via convmerge --skip-hf-staging
+
+version: 1
+
+defaults:
+  output_root: ./data/raw
+  on_error: continue
+  resume: true
+
+auth:
+  hf_token_env: HF_TOKEN
+  github_token_env: GITHUB_TOKEN
+
+datasets:
+  # Hugging Face dataset example
+  - name: sample_hf_dataset
+    hf: org/sample-dataset
+    split: train
+
+  # Raw file URL example
+  - name: sample_raw_jsonl
+    url: https://example.com/path/to/sample.jsonl
+
+  # GitHub repository example (jsonl only)
+  - name: sample_github_repo
+    url: https://github.com/example/repo
+    ext:
+      - ".jsonl"
