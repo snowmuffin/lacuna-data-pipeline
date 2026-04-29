@@ -70,11 +70,14 @@ def unify_file_formats(target_dir: str, target_format: str = ".jsonl") -> None:
 
 
 @task(name="refine-filter-stages", log_prints=True)
-def refine_filter_stages_task(raw_root: str) -> tuple[str, str]:
+def refine_filter_stages_task(
+    raw_root: str,
+    refined_root: str | Path | None = None,
+) -> tuple[str, str]:
     """Stages [1]–[9]: raw→jsonl→multi/single-turn→collect→dedup→split."""
     from pipeline.tasks.refine.refine_stages import default_refine_paths, run_refine_filter_stages
 
-    paths = default_refine_paths(raw_root)
+    paths = default_refine_paths(raw_root, refined_root=refined_root)
     return run_refine_filter_stages(paths)
 
 

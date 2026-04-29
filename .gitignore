@@ -2,6 +2,10 @@
 .env
 sources.yaml
 
+# IDE / local artifacts (may reference paths outside this repo)
+.cursor/
+uploads/
+
 # Python
 __pycache__/
 *.py[cod]

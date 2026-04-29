@@ -28,12 +28,28 @@ class RefinePaths:
     final_dir: Path
 
 
-def default_refine_paths(raw_root: str | Path) -> RefinePaths:
-    base = REPO_ROOT / "data"
-    raw = Path(raw_root)
-    refined = base / "refined"
+def default_refine_paths(
+    raw_root: str | Path,
+    *,
+    refined_root: str | Path | None = None,
+) -> RefinePaths:
+    """Resolve paths for refine stages [1]–[9].
+
+    ``raw_root`` is the directory of per-dataset raw clones (same as collect output).
+
+    ``refined_root`` is the parent directory for ``jsonl/``, ``multi_turn/``,
+    ``single_turn/``, and ``final/``. When omitted, defaults to
+    ``<REPO_ROOT>/data/refined`` so outputs stay under the repo regardless of where
+    raw data lives.
+    """
+    raw = Path(raw_root).resolve()
+    if refined_root is None:
+        refined = (REPO_ROOT / "data" / "refined").resolve()
+    else:
+        p = Path(refined_root)
+        refined = p.resolve() if p.is_absolute() else (REPO_ROOT / p).resolve()
     return RefinePaths(
-        raw_dir=raw.resolve(),
+        raw_dir=raw,
         jsonl_dir=(refined / "jsonl").resolve(),
         multi_turn_dir=(refined / "multi_turn").resolve(),
         single_turn_dir=(refined / "single_turn").resolve(),

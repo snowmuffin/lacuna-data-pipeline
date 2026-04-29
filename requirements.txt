@@ -118,7 +118,8 @@ jsonpatch==1.33
 jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-label-studio==1.23.0
+# label-studio server pins conflict with prefect/pydocket (python-json-logger) and dateparser (pytz).
+# Run the LS app via Docker or a separate venv; keep the SDK for API/export tooling.
 label-studio-sdk==2.0.18
 launchdarkly-server-sdk==8.2.1
 lupa==2.8

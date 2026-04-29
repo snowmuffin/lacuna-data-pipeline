@@ -1,0 +1,7 @@
+# Example convmerge convert preset (chat -> messages).
+# For Alpaca single-turn -> messages, use ``config/presets/alpaca_to_messages.yaml``.
+# CLI: convmerge convert -i in.jsonl -o out.jsonl --preset path/to/this/file.yaml
+
+adapter: chat
+output_format: messages
+encoding: utf-8

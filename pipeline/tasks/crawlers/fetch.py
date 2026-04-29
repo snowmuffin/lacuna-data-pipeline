@@ -90,10 +90,77 @@ def _github_clone_url(url: str, token: str | None) -> str:
     return f"{p.scheme}://x-access-token:{safe}@{host}{path}.git"
 
 
-def _git_lfs_pull(dest: Path, *, enabled: bool = True) -> None:
-    """Fetch Git LFS blobs for ``dest`` (HF/GitHub datasets often use LFS for parquet).
+def _git_lfs_unavailable(stderr_stdout: str) -> bool:
+    """True when git failed because the LFS extension/binary is missing or broken."""
+    low = (stderr_stdout or "").lower()
+    return (
+        "not a git command" in low
+        or ("git-lfs" in low and "not found" in low)
+        or "git-lfs is broken" in low
+        or ("unable to execute" in low and "lfs" in low)
+        or ("appears to be a git command" in low and "lfs" in low)
+    )
 
-    No-op if ``enabled`` is false, ``dest`` is not a git repo, or ``git-lfs`` is missing.
+
+_LFS_REMEDIATION = (
+    "Install Git LFS (https://git-lfs.com), run `git lfs install`, then `git -C <repo> lfs pull`. "
+    "Without it, Parquet/JSON in clones are LFS pointer stubs and refine fails "
+    "(JSONDecodeError, Parquet magic bytes not found)."
+)
+
+# Large HF dataset repos can take a long time to download LFS objects.
+_GIT_LFS_PULL_TIMEOUT_SEC = 14_400
+
+
+def _any_clone_dataset_uses_git_lfs(data: dict[str, Any]) -> bool:
+    """True if any hf or github *repo* clone entry will run Git LFS (per-dataset or default)."""
+    defaults = data.get("defaults") or {}
+    default_lfs = bool(defaults.get("git_lfs", True))
+    for ds in data.get("datasets") or []:
+        if not isinstance(ds, dict):
+            continue
+        dtype = (ds.get("type") or "").strip().lower()
+        use_lfs = bool(ds["git_lfs"]) if "git_lfs" in ds else default_lfs
+        if not use_lfs:
+            continue
+        if dtype == "hf":
+            return True
+        if dtype == "github" and _is_github_repo_clone_url(str(ds.get("url") or "")):
+            return True
+    return False
+
+
+def assert_git_lfs_for_collect(data: dict[str, Any]) -> None:
+    """Fail fast before cloning when ``sources.yaml`` needs Git LFS but it is not usable."""
+    if not _any_clone_dataset_uses_git_lfs(data):
+        return
+    try:
+        r = subprocess.run(
+            ["git", "lfs", "version"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "`git` is not on PATH; cannot run Git LFS. " + _LFS_REMEDIATION
+        ) from e
+    out = ((r.stderr or "") + (r.stdout or "")).strip()
+    if r.returncode != 0 or _git_lfs_unavailable(out):
+        raise RuntimeError(
+            "This collect needs Git LFS (HF/GitHub dataset clones) but `git lfs version` failed. "
+            f"{_LFS_REMEDIATION} Raw output: {out or r.returncode}"
+        )
+    logger.info("Git LFS available: %s", out.splitlines()[0] if out else "ok")
+
+
+def _git_lfs_pull(dest: Path, *, enabled: bool = True) -> None:
+    """Fetch and checkout Git LFS blobs for ``dest``.
+
+    Raises ``RuntimeError`` when ``enabled`` but LFS cannot run or ``git lfs pull`` fails,
+    so collect does not finish with pointer-only files.
+
+    No-op if ``enabled`` is false or ``dest`` is not a git repo.
     """
     if not enabled or not (dest / ".git").is_dir():
         return
@@ -105,15 +172,14 @@ def _git_lfs_pull(dest: Path, *, enabled: bool = True) -> None:
             text=True,
             timeout=120,
         )
-    except FileNotFoundError:
-        logger.warning("git not on PATH; skip LFS for %s", dest)
-        return
+    except FileNotFoundError as e:
+        raise RuntimeError(f"git not on PATH; cannot run LFS for {dest}") from e
     err1 = ((r1.stderr or "") + (r1.stdout or "")).strip()
     if r1.returncode != 0:
-        low = err1.lower()
-        if "not a git command" in low or "git-lfs" in low and "not found" in low:
-            logger.warning("git-lfs not installed; skip LFS for %s (%s)", dest, err1 or r1.returncode)
-            return
+        if _git_lfs_unavailable(err1):
+            raise RuntimeError(
+                f"git-lfs missing or broken for {dest}. {_LFS_REMEDIATION} Raw error: {err1 or r1.returncode}"
+            )
         logger.warning("git lfs install --local non-zero for %s (continuing pull): %s", dest, err1 or r1.returncode)
 
     try:
@@ -121,14 +187,26 @@ def _git_lfs_pull(dest: Path, *, enabled: bool = True) -> None:
             ["git", "-C", str(dest), "lfs", "pull"],
             capture_output=True,
             text=True,
+            timeout=_GIT_LFS_PULL_TIMEOUT_SEC,
         )
-    except FileNotFoundError:
-        return
+    except FileNotFoundError as e:
+        raise RuntimeError(f"git not on PATH during lfs pull for {dest}") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"git lfs pull timed out after {_GIT_LFS_PULL_TIMEOUT_SEC}s for {dest}. "
+            "Retry collect or run `git lfs pull` manually in that directory."
+        ) from e
     err2 = ((r2.stderr or "") + (r2.stdout or "")).strip()
     if r2.returncode != 0:
-        logger.warning("git lfs pull failed for %s: %s", dest, err2 or r2.returncode)
-    else:
-        logger.info("git lfs pull finished for %s", dest)
+        if _git_lfs_unavailable(err2):
+            raise RuntimeError(
+                f"git lfs pull failed (LFS unavailable) for {dest}. {_LFS_REMEDIATION} Raw error: {err2 or r2.returncode}"
+            )
+        raise RuntimeError(
+            f"git lfs pull failed for {dest} (exit {r2.returncode}). "
+            f"Check network, credentials (HF_TOKEN / GITHUB_TOKEN), and disk space. Output:\n{err2}"
+        )
+    logger.info("git lfs pull finished for %s", dest)
 
 
 def _git_clone(url: str, dest: Path, *, shallow: bool = True) -> None:
